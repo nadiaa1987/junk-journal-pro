@@ -4,69 +4,290 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Junk Journal Pro</title>
+    <title>Junk Journal Pro | Bulk Generator</title>
+    
+    <!-- Dependencies -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,200..900;1,200..900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
     <style>
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #fcfbf4; /* Creamy vintage background */
+            background-color: #fcfbf4;
             margin: 0;
             padding: 0;
+            background-image: url('https://www.transparenttextures.com/patterns/handmade-paper.png');
         }
         h1, h2, h3, .vintage-font {
             font-family: 'Crimson Pro', serif;
         }
-        .paper-texture {
-            background-image: url('https://www.transparenttextures.com/patterns/handmade-paper.png');
-        }
         .sepia-overlay {
-            filter: sepia(0.2) contrast(1.1);
+            filter: sepia(0.15) contrast(1.05) brightness(0.95);
+            transition: all 0.3s ease;
+        }
+        .sepia-overlay:hover {
+            filter: none;
+            transform: scale(1.02);
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #d6d3d1;
+            border-radius: 10px;
         }
     </style>
-<script type="importmap">
-{
-  "imports": {
-    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
-    "react/": "https://esm.sh/react@^19.2.4/",
-    "react": "https://esm.sh/react@^19.2.4",
-    "@google/genai": "https://esm.sh/@google/genai@^1.39.0"
-  }
-}
-</script>
 </head>
-<body class="text-stone-800">
+<body>
     <div id="root"></div>
-    
-    <!-- 
-      ENTRY POINT: This tag is required for the application to load.
-      The relative path './index.tsx' ensures compatibility with sub-folders on GitHub Pages.
-    -->
-    <script type="module" src="./index.tsx"></script>
 
-    <!-- 
-      DIAGNOSTIC TOOL: If the app fails to load on GitHub/Netlify, 
-      this will print the error to the screen to help you debug. 
-    -->
-    <script>
-        window.addEventListener('error', function(event) {
-            console.error('Deployment runtime error:', event.error);
-            const root = document.getElementById('root');
-            if (root && root.innerHTML === '') {
-                root.innerHTML = `
-                    <div style="padding: 40px; color: #444; font-family: sans-serif; text-align: center;">
-                        <h2 style="color: #e53e3e;">Application failed to start</h2>
-                        <p>This is often caused by missing files or browser incompatibility with TSX files.</p>
-                        <p style="font-size: 14px; background: #eee; padding: 10px; border-radius: 5px; overflow: auto; max-width: 600px; margin: 20px auto; text-align: left;">
-                            Error: ${event.message}
-                        </p>
-                        <p style="color: #718096; font-size: 12px;">Check browser console (F12) for full details.</p>
-                    </div>
-                `;
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // --- CONSTANTS ---
+        const API_KEY = "sk_8jvqDKK7X2JMENDyeY3BCliHUF4goTVa";
+        const BASE_URL = "https://image.pollinations.ai/prompt/";
+
+        const THEME_PRESETS = {
+            BOTANICAL: {
+                name: "Vintage Botanical",
+                prompt: "Junk journal page background, vintage botanical illustration, faded french handwriting, pressed wild flowers, old yellowed paper texture, coffee stains, lace borders, shabby chic aesthetic, hyper-realistic texture, decoupage style"
+            },
+            STEAMPUNK: {
+                name: "Industrial Steampunk",
+                prompt: "Junk journal page, steampunk aesthetic, gears and cogs, victorian industrial diagrams, burnt paper edges, sepia tones, grunge texture, blueprints background, brass metallic accents, mixed media collage"
+            },
+            VICTORIAN: {
+                name: "Victorian Ephemera",
+                prompt: "Junk journal page, victorian ladies fashion fashion plate, vintage tickets and stamps, torn newspaper clippings from 1800s, elegant cursive script, pastel roses, distress ink edges, scrapbook layer style"
+            },
+            CUSTOM: {
+                name: "Custom Magic",
+                prompt: ""
             }
-        });
+        };
+
+        // --- COMPONENTS ---
+
+        const App = () => {
+            const [theme, setTheme] = useState('BOTANICAL');
+            const [customPrompt, setCustomPrompt] = useState('');
+            const [quantity, setQuantity] = useState(5);
+            const [isGenerating, setIsGenerating] = useState(false);
+            const [progress, setProgress] = useState(null);
+            const [gallery, setGallery] = useState([]);
+            const [error, setError] = useState(null);
+
+            const generateImage = async (prompt, seed) => {
+                const encodedPrompt = encodeURIComponent(prompt);
+                // We use the auth param to avoid CORS issues with headers on static hosts
+                const url = `${BASE_URL}${encodedPrompt}?width=1024&height=1408&nologo=true&model=flux&seed=${seed}&auth=${API_KEY}`;
+                
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`API Error: ${response.status}`);
+                
+                const blob = await response.blob();
+                return { 
+                    blob, 
+                    localUrl: URL.createObjectURL(blob) 
+                };
+            };
+
+            const downloadImage = (blob, seed) => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `journal-page-${seed}.png`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            };
+
+            const handleGenerate = async () => {
+                setIsGenerating(true);
+                setError(null);
+                const basePrompt = theme === 'CUSTOM' ? customPrompt : THEME_PRESETS[theme].prompt;
+                
+                const currentGallery = [];
+
+                for (let i = 1; i <= quantity; i++) {
+                    try {
+                        setProgress({ current: i, total: quantity, status: `Brewing page ${i} of ${quantity}...` });
+                        
+                        const seed = Math.floor(Math.random() * 2147483647);
+                        const { blob, localUrl } = await generateImage(basePrompt, seed);
+                        
+                        downloadImage(blob, seed);
+
+                        const newImg = {
+                            id: `${seed}-${i}`,
+                            url: localUrl,
+                            theme: THEME_PRESETS[theme].name,
+                            prompt: basePrompt
+                        };
+                        
+                        setGallery(prev => [newImg, ...prev]);
+                    } catch (err) {
+                        setError("Failed to fetch image. Ensure your API key is valid.");
+                        break;
+                    }
+                }
+
+                setIsGenerating(false);
+                setProgress(null);
+            };
+
+            return (
+                <div className="min-h-screen flex flex-col">
+                    {/* Header */}
+                    <header className="py-12 px-6 bg-white/50 backdrop-blur-sm border-b border-stone-200">
+                        <div className="max-w-6xl mx-auto text-center">
+                            <h1 className="text-5xl md:text-7xl font-black vintage-font text-stone-800 mb-2 tracking-tight">
+                                Junk Journal <span className="text-stone-400 italic">Studio</span>
+                            </h1>
+                            <p className="text-stone-500 font-medium uppercase tracking-[0.3em] text-[10px]">
+                                Professional Bulk Ephemera Generator
+                            </p>
+                        </div>
+                    </header>
+
+                    {/* Content */}
+                    <main className="flex-1 max-w-6xl w-full mx-auto p-6 grid grid-cols-1 lg:grid-cols-4 gap-10">
+                        
+                        {/* Control Panel */}
+                        <aside className="lg:col-span-1">
+                            <div className="bg-white p-8 rounded-3xl shadow-xl border border-stone-200 sticky top-10">
+                                <h2 className="text-2xl font-bold vintage-font mb-6 text-stone-700">Creation Tools</h2>
+                                
+                                <div className="space-y-6">
+                                    <div>
+                                        <label className="block text-[10px] font-black text-stone-400 uppercase mb-2 tracking-widest">Select Aesthetic</label>
+                                        <select 
+                                            className="w-full p-4 bg-stone-50 border border-stone-200 rounded-2xl focus:ring-2 focus:ring-stone-300 outline-none font-medium transition-all"
+                                            value={theme}
+                                            onChange={(e) => setTheme(e.target.value)}
+                                        >
+                                            {Object.entries(THEME_PRESETS).map(([key, value]) => (
+                                                <option key={key} value={key}>{value.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    {theme === 'CUSTOM' && (
+                                        <div className="animate-in fade-in slide-in-from-top-4 duration-300">
+                                            <label className="block text-[10px] font-black text-stone-400 uppercase mb-2 tracking-widest">Artisan Prompt</label>
+                                            <textarea
+                                                className="w-full p-4 bg-stone-50 border border-stone-200 rounded-2xl focus:ring-2 focus:ring-stone-300 h-32 resize-none text-sm outline-none"
+                                                placeholder="e.g. Vintage astronomical charts with gold foil..."
+                                                value={customPrompt}
+                                                onChange={(e) => setCustomPrompt(e.target.value)}
+                                            />
+                                        </div>
+                                    )}
+
+                                    <div>
+                                        <label className="block text-[10px] font-black text-stone-400 uppercase mb-2 tracking-widest">Print Quantity: {quantity}</label>
+                                        <input 
+                                            type="range" min="1" max="20" 
+                                            value={quantity}
+                                            onChange={(e) => setQuantity(Number(e.target.value))}
+                                            className="w-full h-2 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-stone-800"
+                                        />
+                                    </div>
+
+                                    {error && (
+                                        <div className="p-4 bg-red-50 border border-red-100 rounded-2xl text-red-600 text-xs font-bold animate-pulse">
+                                            {error}
+                                        </div>
+                                    )}
+
+                                    <button
+                                        onClick={handleGenerate}
+                                        disabled={isGenerating || (theme === 'CUSTOM' && !customPrompt.trim())}
+                                        className="w-full py-5 bg-stone-800 text-stone-50 rounded-2xl font-black text-lg hover:bg-stone-900 transition-all disabled:opacity-30 shadow-2xl hover:-translate-y-1 active:translate-y-0"
+                                    >
+                                        {isGenerating ? 'Drafting...' : 'Bulk Generate'}
+                                    </button>
+                                </div>
+
+                                {progress && (
+                                    <div className="mt-8 pt-8 border-t border-stone-100">
+                                        <p className="text-[10px] font-black text-stone-500 mb-2 uppercase tracking-tighter">{progress.status}</p>
+                                        <div className="w-full h-1.5 bg-stone-100 rounded-full overflow-hidden">
+                                            <div 
+                                                className="h-full bg-stone-800 transition-all duration-500 ease-out"
+                                                style={{ width: `${(progress.current / progress.total) * 100}%` }}
+                                            ></div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </aside>
+
+                        {/* Result Gallery */}
+                        <section className="lg:col-span-3">
+                            <div className="flex items-center justify-between mb-8">
+                                <h2 className="text-3xl font-bold vintage-font text-stone-800">Your Collection</h2>
+                                <span className="px-4 py-1.5 bg-stone-200/50 text-stone-500 text-[10px] font-black rounded-full uppercase tracking-widest">{gallery.length} Pages Created</span>
+                            </div>
+
+                            {gallery.length === 0 ? (
+                                <div className="h-[400px] border-2 border-dashed border-stone-300 rounded-[2rem] flex flex-col items-center justify-center text-stone-400 space-y-4">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    </svg>
+                                    <p className="italic vintage-font text-xl">The studio is quiet. Begin generating to see your pages.</p>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-8">
+                                    {gallery.map((img) => (
+                                        <div key={img.id} className="group bg-white p-3 rounded-3xl shadow-lg border border-stone-200 hover:shadow-2xl transition-all duration-500">
+                                            <div className="aspect-[1/1.4] overflow-hidden rounded-2xl bg-stone-100 relative">
+                                                <img 
+                                                    src={img.url} 
+                                                    alt="Journal Page" 
+                                                    className="w-full h-full object-cover sepia-overlay"
+                                                />
+                                                <div className="absolute inset-0 bg-stone-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                                                    <span className="text-white font-black text-xs uppercase tracking-widest border border-white px-4 py-2 rounded-full">Downloaded</span>
+                                                </div>
+                                            </div>
+                                            <div className="p-4">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <div className="w-2 h-2 rounded-full bg-stone-300"></div>
+                                                    <p className="text-[10px] font-black text-stone-400 uppercase tracking-[0.2em]">{img.theme}</p>
+                                                </div>
+                                                <p className="text-xs text-stone-500 italic line-clamp-2 leading-relaxed">{img.prompt}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </section>
+                    </main>
+
+                    <footer className="py-12 text-center">
+                        <p className="text-stone-400 text-[10px] font-black uppercase tracking-[0.5em]">
+                            Built for Aesthetic Archivists • No Build Step Required
+                        </p>
+                    </footer>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
     </script>
 </body>
 </html>
