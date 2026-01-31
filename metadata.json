@@ -1,0 +1,5 @@
+{
+  "name": "Junk Journal Pro",
+  "description": "Bulk generation tool for vintage junk journal pages using the Pollinations.ai Flux model.",
+  "requestFramePermissions": []
+}
